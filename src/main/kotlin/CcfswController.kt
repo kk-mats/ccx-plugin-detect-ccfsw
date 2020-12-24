@@ -7,7 +7,7 @@ import java.io.File
 import java.nio.file.Paths
 
 
-class CcfswController(private val cliArgs: WorkspacePaths, private val query: Query) {
+class CcfswController(private val cliArgs: CliArgs, private val query: Query) {
     private val args = arrayListOf("D")
     private val resultRoot = this.cliArgs.artifacts.resolve("0")
     private val resultOutput = this.resultRoot.resolve("output")
@@ -76,14 +76,15 @@ class CcfswController(private val cliArgs: WorkspacePaths, private val query: Qu
         val clonePairs: List<ClonePair> = result.clonePairs.mapNotNull {
             val file1 = rawFileMap[it.fragment1.fileId]
             val file2 = rawFileMap[it.fragment2.fileId]
-            if (file1 == null || file2 == null) {
+            if (file1 != null && file2 != null) {
+                ClonePair(
+                    Fragment(this.repo.relativize(Paths.get(file1)).toString(), it.fragment1.begin, it.fragment1.end),
+                    Fragment(this.repo.relativize(Paths.get(file2)).toString(), it.fragment2.begin, it.fragment2.end),
+                    it.similarity / 100f
+                )
+            } else {
                 null
             }
-            ClonePair(
-                Fragment(this.repo.relativize(Paths.get(file1)).toString(), it.fragment1.begin, it.fragment1.end),
-                Fragment(this.repo.relativize(Paths.get(file2)).toString(), it.fragment2.begin, it.fragment2.end),
-                it.similarity / 100f
-            )
         }
 
         return DetectionResult(clonePairs)
