@@ -7,88 +7,108 @@ import java.io.File
 import java.nio.file.Paths
 
 
-class CcfswController(val cliArgs: CliArgs, val query: Query) {
-    val args = arrayListOf("D")
-    val resultRoot = this.cliArgs.artifacts.resolve("0")
-    val repo = Paths.get(this.cliArgs.resources.toString(), "repo", this.query.targets[0].revision).toAbsolutePath()
-    var cloneSource = Paths.get(this.resultRoot.toString(), "output", query.parameters.output)
-    var removeCloneSource = true
+class CcfswController(private val cliArgs: WorkspacePaths, private val query: Query) {
+    private val args = arrayListOf("D")
+    private val resultRoot = this.cliArgs.artifacts.resolve("0")
+    private val resultOutput = this.resultRoot.resolve("output")
+    private val repo = this.cliArgs.resources.resolve("repo").resolve(this.query.targets[0].revision)
+    private var outputBase = this.resultOutput.resolve(query.parameters.output)
+    private val ccfswJson = File("${this.outputBase}_ccfsw.json")
+
+    private val binPath: String = Paths.get(
+        "CCFinderSW-1.0", "bin", if (System.getProperty("os.name").toLowerCase().startsWith("win")) {
+            "CCFinderSW.bat"
+        } else {
+            "CCFinderSW"
+        }
+    ).toAbsolutePath().toString()
 
     private fun appendArg(key: String, value: String) {
         this.args.add(key)
         this.args.add(value)
     }
 
+    private fun appendOptional(key: String, value: Any?) {
+        if (value != null) {
+            this.appendArg(key, value.toString())
+        }
+    }
+
+    // reads parameters from `query.json` and builds commandline string for CCFinderSW
     private fun buildCcfswArgs() {
-        val d = this.repo.resolve(this.query.targets[0].directory).toAbsolutePath()
-        this.appendArg("-d", d.toString())
-        this.appendArg("-o", this.cloneSource.toString())
+        this.appendArg("-d", this.repo.resolve(this.query.targets[0].directory).normalize().toString())
+        this.appendArg("-o", this.outputBase.toString())
         this.appendArg("-l", this.query.parameters.language)
-        this.appendArg("-w", this.query.parameters.w.toString())
-        this.appendArg("-tks", this.query.parameters.tks.toString())
-        this.appendArg("-rnr", this.query.parameters.rnr.toString())
-        this.appendArg("-charset", this.query.parameters.charset)
-        this.appendArg("-ccfsw", this.query.parameters.ccfsw)
-        if(this.query.parameters.ccf) {
+
+        this.appendOptional("-w", this.query.parameters.w)
+        this.appendOptional("-tks", this.query.parameters.tks)
+        this.appendOptional("-rnr", this.query.parameters.rnr)
+
+        this.appendOptional("-charset", this.query.parameters.charset)
+        this.appendOptional("-ccfsw", this.query.parameters.ccfsw)
+
+        if (this.query.parameters.ccf != null) {
             this.args.add("-ccf")
         }
-        if(this.query.parameters.ccfx) {
+        if (this.query.parameters.ccfx != null) {
             this.args.add("-ccfx")
         }
 
-        if (this.query.parameters.json!=null) {
-            this.removeCloneSource = false
-            this.appendArg("-json", this.query.parameters.json)
-        } else {
-            this.appendArg("-json", "-")
-        }
+        this.appendOptional("-json", this.query.parameters.json)
     }
 
     private fun launch(): Int {
-        return ProcessBuilder(Paths.get("ccfsw", "bin", "CCFinderSW").toString(),
-        *this.args.toTypedArray()).start().waitFor()
+        return try {
+            println("<plugin-detector>")
+            ProcessBuilder(this.binPath, *this.args.toTypedArray()).apply { this.inheritIO() }.start().waitFor()
+        } finally {
+            println("</plugin-detector>")
+        }
     }
 
-    private fun convert() {
-        val ccfswResult = File("${this.cloneSource}_ccfsw.json")
-        val result = Json.decodeFromString<CcfswDetectionResult>(ccfswResult.readText())
+    // converts CCFinderSW's clone output in Json format into CCX normalized clone format
+    private fun convert(): DetectionResult {
+        val result = Json { ignoreUnknownKeys = true }.decodeFromString<CcfswDetectionResult>(ccfswJson.readText())
 
         val rawFileMap = HashMap<Int, String>()
         result.fileTable.forEach { rawFileMap[it.id] = it.path }
 
-        val clonePairs = arrayListOf<ClonePair>()
-
-        for (p in result.clonePairs) {
-            val ff1 = rawFileMap[p.fragment1.fileId]
-            val ff2 = rawFileMap[p.fragment2.fileId]
-            if (ff1 != null && ff2 != null) {
-                val f1 = Fragment(this.repo.relativize(Paths.get(ff1)).normalize(), p.fragment1.begin, p.fragment1.end)
-                val f2 = Fragment(this.repo.relativize(Paths.get(ff2)).normalize(), p.fragment2.begin, p.fragment2.end)
-
-                clonePairs.add(ClonePair(f1, f2, p.similarity / 100f))
+        val clonePairs: List<ClonePair> = result.clonePairs.mapNotNull {
+            val file1 = rawFileMap[it.fragment1.fileId]
+            val file2 = rawFileMap[it.fragment2.fileId]
+            if (file1 == null || file2 == null) {
+                null
             }
+            ClonePair(
+                Fragment(this.repo.relativize(Paths.get(file1)).toString(), it.fragment1.begin, it.fragment1.end),
+                Fragment(this.repo.relativize(Paths.get(file2)).toString(), it.fragment2.begin, it.fragment2.end),
+                it.similarity / 100f
+            )
         }
 
-        val normalized = DetectionResult(
-            Environment("CCFinderSW", "1.0", query.parameters),
-            clonePairs
-        )
-
-        val out = this.resultRoot.resolve("clones.json").toFile()
-        out.writeText(Json.encodeToString(normalized))
-
-        if(this.removeCloneSource) {
-            ccfswResult.delete()
-        }
+        return DetectionResult(clonePairs)
     }
 
-    fun Exec(): Int {
+    fun exec(): Int {
         this.buildCcfswArgs()
-        val statusCode = this.launch()
-        if(statusCode==0) {
-            this.convert()
+        this.resultOutput.toFile().mkdirs()
+
+        println("[plugin] Launching CCFinderSW with arguments: ${this.args}")
+        val exitCode = this.launch()
+        return try {
+            if (exitCode == 0) {
+                println("[plugin] Converting detection result from CCFinderSW format into CCX format.")
+                val result = this.convert()
+
+                println("[plugin] Serializing the detection result.")
+                this.resultRoot.resolve("clones.json").toFile().writeText(Json.encodeToString(result))
+            }
+            exitCode
+        } finally {
+            if (this.query.parameters.json != null && !this.ccfswJson.delete()) {
+                println("[plugin] Failed to delete ${this.ccfswJson.path}.")
+            }
         }
-        return statusCode
     }
 
 }

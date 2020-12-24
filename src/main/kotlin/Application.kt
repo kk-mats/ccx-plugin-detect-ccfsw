@@ -5,24 +5,28 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
-import com.github.kk_mats.ccx_plugin_detect_ccfsw.types.*
 
-data class CliArgs(val resources: Path, val artifacts: Path)
+data class WorkspacePaths(val resources: Path, val artifacts: Path)
 
-fun parse(args: Array<String>): CliArgs {
+fun parse(args: Array<String>): WorkspacePaths {
     val parser = ArgParser("ccx-plugin-detect-ccfsw")
-    val resources by parser.option(ArgType.String).required()
-    val artifacts by parser.option(ArgType.String).required()
+    val workspace by parser.option(ArgType.String).required()
 
     parser.parse(args)
-
-    return CliArgs(Paths.get(resources).toAbsolutePath(), Paths.get(artifacts).toAbsolutePath())
+    val w = Paths.get(workspace).toAbsolutePath()
+    return WorkspacePaths(w.resolve("resources"), w.resolve("artifacts"))
 }
 
 fun main(args: Array<String>) {
-    val cliArgs = parse(args)
-    val queryJson = cliArgs.resources.resolve("query.json").toFile()
-    val query = Json.decodeFromString<Query>(queryJson.readText())
+    val exitCode = try {
+        val paths = parse(args)
+        val queryJson = paths.resources.resolve("query.json").toFile()
+        CcfswController(paths, Json.decodeFromString(queryJson.readText())).exec()
+    } catch (e: Exception) {
+        println("[plugin] Unhandled exception: ${e.stackTraceToString()}")
+        1
+    }
 
-    kotlin.system.exitProcess(CcfswController(cliArgs, query).Exec())
+    println("[plugin] Finished with exit code ${exitCode}.")
+    kotlin.system.exitProcess(exitCode)
 }
