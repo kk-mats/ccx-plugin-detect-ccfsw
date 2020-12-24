@@ -47,10 +47,10 @@ class CcfswController(private val cliArgs: WorkspacePaths, private val query: Qu
         this.appendOptional("-charset", this.query.parameters.charset)
         this.appendOptional("-ccfsw", this.query.parameters.ccfsw)
 
-        if (this.query.parameters.ccf != null) {
+        if (this.query.parameters.ccf != null && this.query.parameters.ccf) {
             this.args.add("-ccf")
         }
-        if (this.query.parameters.ccfx != null) {
+        if (this.query.parameters.ccfx != null && this.query.parameters.ccfx) {
             this.args.add("-ccfx")
         }
 

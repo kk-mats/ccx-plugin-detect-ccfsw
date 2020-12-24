@@ -10,27 +10,28 @@ class Parameters(
     @SerialName("o") val output: String,
     @SerialName("l") val language: String,
 
-    @SerialName("t") val t: Int?,
-    @SerialName("tks") val tks: Int?,
-    @SerialName("rnr") val rnr: Float?,
-    @SerialName("w") val w: Int?,
+    @SerialName("t") val t: Int? = null,
+    @SerialName("tks") val tks: Int? = null,
+    @SerialName("rnr") val rnr: Float? = null,
+    @SerialName("w") val w: Int? = null,
 
-    @SerialName("charset") val charset: String?,
-    @SerialName("ccf") val ccf: Boolean?,
-    @SerialName("ccfx") val ccfx: Boolean?,
-    @SerialName("ccfsw") val ccfsw: String?,
-    @SerialName("json") val json: String?,
+    @SerialName("charset") val charset: String? = null,
+    @SerialName("ccf") val ccf: Boolean? = null,
+    @SerialName("ccfx") val ccfx: Boolean? = null,
+    @SerialName("ccfsw") val ccfsw: String? = null,
+    @SerialName("json") val json: String? = null,
 ) {
     init {
-        require(this.t == null || this.t > 0) { "If not null, parameters.t must be greater than zero." }
-        require(this.tks == null || this.tks > 0) { "If not null, parameters.tks must be greater than zero." }
-        require(this.rnr == null || (0 < this.rnr && this.rnr <= 1)) { "If not null, parameters.rnr must in range from zero to one." }
-        require(this.w == null || (0 <= this.w && this.w <= 2)) { "If not null, parameters.w must be 0, 1, or 2." }
+        require(this.t == null || this.t > 0) { "parameters.t must be greater than zero." }
+        require(this.tks == null || this.tks > 0) { "parameters.tks must be greater than zero." }
+        require(this.rnr == null || (0 < this.rnr && this.rnr <= 1)) { "parameters.rnr must in range from zero to one." }
+        require(this.w == null || (0 <= this.w && this.w <= 2)) { "parameters.w must be 0, 1, or 2." }
 
-        require(arrayOf(null, "sjis", "utf8", "euc", "auto").contains(this.charset)) { "If not null, parameters.charset must be \"sjis\", \"utf8\", \"euc\", or \"auto\"." }
-
-        require(arrayOf(null, "pair", "set").contains(this.ccfsw)) { "If not null, parameters.ccfsw must be \"pair\", or \"set\"." }
-        require(arrayOf(null, "+", "-").contains(this.json)) { "If not null, parameters.json must be \"+\" or \"-\"." }
+        require(arrayOf(null, "sjis", "utf8", "euc", "auto").contains(this.charset)) {
+            "parameters.charset must be \"sjis\", \"utf8\", \"euc\", or \"auto\"."
+        }
+        require(arrayOf(null, "pair", "set").contains(this.ccfsw)) { "parameters.ccfsw must be \"pair\", or \"set\"." }
+        require(arrayOf(null, "+", "-").contains(this.json)) { "parameters.json must be \"+\" or \"-\"." }
     }
 }
 
