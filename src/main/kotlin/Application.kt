@@ -6,22 +6,22 @@ import java.nio.file.Paths
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 
-data class CliArgs(val resources: Path, val artifacts: Path)
+data class WorkspacePaths(val resources: Path, val artifacts: Path)
 
-fun parse(args: Array<String>): CliArgs {
+fun parse(args: Array<String>): WorkspacePaths {
     val parser = ArgParser("ccx-plugin-detect-ccfsw")
-    val resources by parser.option(ArgType.String).required()
-    val artifacts by parser.option(ArgType.String).required()
+    val workspace by parser.option(ArgType.String, null, "w").required()
 
     parser.parse(args)
-    return CliArgs(Paths.get(resources).toAbsolutePath(), Paths.get(artifacts).toAbsolutePath())
+    val w = Paths.get(workspace).toAbsolutePath()
+    return WorkspacePaths(w.resolve("resources"), w.resolve("artifacts"))
 }
 
 fun main(args: Array<String>) {
     val exitCode = try {
-        val cliArgs = parse(args)
-        val queryJson = cliArgs.resources.resolve("query.json").toFile()
-        CcfswController(cliArgs, Json.decodeFromString(queryJson.readText())).exec()
+        val paths = parse(args)
+        val queryJson = paths.resources.resolve("query.json").toFile()
+        CcfswController(paths, Json.decodeFromString(queryJson.readText())).exec()
     } catch (e: Exception) {
         println("[plugin] Unhandled exception: ${e.stackTraceToString()}")
         1

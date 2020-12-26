@@ -7,11 +7,11 @@ import java.io.File
 import java.nio.file.Paths
 
 
-class CcfswController(private val cliArgs: CliArgs, private val query: Query) {
+class CcfswController(private val workspacePaths: WorkspacePaths, private val query: Query) {
     private val args = arrayListOf("D")
-    private val resultRoot = this.cliArgs.artifacts.resolve("0")
+    private val resultRoot = this.workspacePaths.artifacts.resolve("0")
     private val resultOutput = this.resultRoot.resolve("output")
-    private val repo = this.cliArgs.resources.resolve("repo").resolve(this.query.targets[0].revision)
+    private val repo = this.workspacePaths.resources.resolve("repo").resolve(this.query.targets[0].revision)
     private var outputBase = this.resultOutput.resolve(query.parameters.output)
     private val ccfswJson = File("${this.outputBase}_ccfsw.json")
 
